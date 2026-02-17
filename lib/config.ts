@@ -58,6 +58,11 @@ export interface PurgeErrors {
     protectedTools: string[]
 }
 
+export interface SubagentStrategies {
+    enabled: boolean
+    automaticOnly: boolean
+}
+
 export interface TurnProtection {
     enabled: boolean
     turns: number
@@ -70,6 +75,7 @@ export interface PluginConfig {
     pruneNotificationType: "chat" | "toast"
     commands: Commands
     manualMode: ManualModeConfig
+    subagentStrategies: SubagentStrategies
     turnProtection: TurnProtection
     protectedFilePatterns: string[]
     tools: Tools
@@ -111,6 +117,9 @@ export const VALID_CONFIG_KEYS = new Set([
     "manualMode",
     "manualMode.enabled",
     "manualMode.automaticStrategies",
+    "subagentStrategies",
+    "subagentStrategies.enabled",
+    "subagentStrategies.automaticOnly",
     "tools",
     "tools.settings",
     "tools.settings.nudgeEnabled",
@@ -298,6 +307,39 @@ export function validateConfigTypes(config: Record<string, any>): ValidationErro
                 key: "manualMode",
                 expected: "{ enabled: boolean, automaticStrategies: boolean }",
                 actual: typeof manualMode,
+            })
+        }
+    }
+
+    // Subagent strategies validator
+    const subagentStrategies = config.subagentStrategies
+    if (subagentStrategies !== undefined) {
+        if (typeof subagentStrategies === "object") {
+            if (
+                subagentStrategies.enabled !== undefined &&
+                typeof subagentStrategies.enabled !== "boolean"
+            ) {
+                errors.push({
+                    key: "subagentStrategies.enabled",
+                    expected: "boolean",
+                    actual: typeof subagentStrategies.enabled,
+                })
+            }
+            if (
+                subagentStrategies.automaticOnly !== undefined &&
+                typeof subagentStrategies.automaticOnly !== "boolean"
+            ) {
+                errors.push({
+                    key: "subagentStrategies.automaticOnly",
+                    expected: "boolean",
+                    actual: typeof subagentStrategies.automaticOnly,
+                })
+            }
+        } else {
+            errors.push({
+                key: "subagentStrategies",
+                expected: "{ enabled: boolean, automaticOnly: boolean }",
+                actual: typeof subagentStrategies,
             })
         }
     }
@@ -572,6 +614,10 @@ const defaultConfig: PluginConfig = {
         enabled: false,
         automaticStrategies: true,
     },
+    subagentStrategies: {
+        enabled: false,
+        automaticOnly: true,
+    },
     turnProtection: {
         enabled: false,
         turns: 4,
@@ -790,6 +836,18 @@ function mergeCommands(
     }
 }
 
+function mergeSubagentStrategies(
+    base: PluginConfig["subagentStrategies"],
+    override?: Partial<PluginConfig["subagentStrategies"]>,
+): PluginConfig["subagentStrategies"] {
+    if (override === undefined) return base
+
+    return {
+        enabled: override.enabled ?? base.enabled,
+        automaticOnly: override.automaticOnly ?? base.automaticOnly,
+    }
+}
+
 function mergeManualMode(
     base: PluginConfig["manualMode"],
     override?: Partial<PluginConfig["manualMode"]>,
@@ -812,6 +870,10 @@ function deepCloneConfig(config: PluginConfig): PluginConfig {
         manualMode: {
             enabled: config.manualMode.enabled,
             automaticStrategies: config.manualMode.automaticStrategies,
+        },
+        subagentStrategies: {
+            enabled: config.subagentStrategies.enabled,
+            automaticOnly: config.subagentStrategies.automaticOnly,
         },
         turnProtection: { ...config.turnProtection },
         protectedFilePatterns: [...config.protectedFilePatterns],
@@ -872,6 +934,10 @@ export function getConfig(ctx: PluginInput): PluginConfig {
                     result.data.pruneNotificationType ?? config.pruneNotificationType,
                 commands: mergeCommands(config.commands, result.data.commands as any),
                 manualMode: mergeManualMode(config.manualMode, result.data.manualMode as any),
+                subagentStrategies: mergeSubagentStrategies(
+                    config.subagentStrategies,
+                    result.data.subagentStrategies as any,
+                ),
                 turnProtection: {
                     enabled: result.data.turnProtection?.enabled ?? config.turnProtection.enabled,
                     turns: result.data.turnProtection?.turns ?? config.turnProtection.turns,
@@ -918,6 +984,10 @@ export function getConfig(ctx: PluginInput): PluginConfig {
                     result.data.pruneNotificationType ?? config.pruneNotificationType,
                 commands: mergeCommands(config.commands, result.data.commands as any),
                 manualMode: mergeManualMode(config.manualMode, result.data.manualMode as any),
+                subagentStrategies: mergeSubagentStrategies(
+                    config.subagentStrategies,
+                    result.data.subagentStrategies as any,
+                ),
                 turnProtection: {
                     enabled: result.data.turnProtection?.enabled ?? config.turnProtection.enabled,
                     turns: result.data.turnProtection?.turns ?? config.turnProtection.turns,
@@ -961,6 +1031,10 @@ export function getConfig(ctx: PluginInput): PluginConfig {
                     result.data.pruneNotificationType ?? config.pruneNotificationType,
                 commands: mergeCommands(config.commands, result.data.commands as any),
                 manualMode: mergeManualMode(config.manualMode, result.data.manualMode as any),
+                subagentStrategies: mergeSubagentStrategies(
+                    config.subagentStrategies,
+                    result.data.subagentStrategies as any,
+                ),
                 turnProtection: {
                     enabled: result.data.turnProtection?.enabled ?? config.turnProtection.enabled,
                     turns: result.data.turnProtection?.turns ?? config.turnProtection.turns,

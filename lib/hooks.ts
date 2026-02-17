@@ -72,7 +72,10 @@ export function createSystemPromptHandler(
         }
 
         if (state.isSubAgent) {
-            return
+            // Skip system prompt injection for subagents unless full (non-automaticOnly) mode
+            if (!config.subagentStrategies.enabled || config.subagentStrategies.automaticOnly) {
+                return
+            }
         }
 
         const systemText = output.system.join("\n")
@@ -106,6 +109,28 @@ export function createChatMessageTransformHandler(
         await checkSession(client, state, logger, output.messages, config.manualMode.enabled)
 
         if (state.isSubAgent) {
+            if (!config.subagentStrategies.enabled) {
+                return
+            }
+
+            // Run zero-cost automatic strategies for subagents
+            syncToolCache(state, config, logger, output.messages)
+            buildToolIdList(state, output.messages, logger)
+
+            deduplicate(state, logger, config, output.messages)
+            supersedeWrites(state, logger, config, output.messages)
+            purgeErrors(state, logger, config, output.messages)
+
+            if (!config.subagentStrategies.automaticOnly) {
+                // Full mode: also run LLM-driven pruning for subagents
+                prune(state, logger, config, output.messages)
+                insertPruneToolContext(state, config, logger, output.messages)
+                applyPendingManualTriggerPrompt(state, output.messages, logger)
+            }
+
+            if (state.sessionId) {
+                await logger.saveContext(state.sessionId, output.messages)
+            }
             return
         }
 
