@@ -14,8 +14,8 @@ import {
 import { saveSessionState } from "../../state/persistence"
 import {
     appendToTextPart,
-    appendToLastTextPart,
     appendToAllToolParts,
+    prependToFirstTextPart,
     createSyntheticTextPart,
     hasContent,
 } from "../utils"
@@ -207,7 +207,9 @@ export const injectMessageIds = (
             continue
         }
 
-        if (appendToLastTextPart(message, tag)) {
+        // Put the ID ahead of the reply text rather than after it, so the model's own
+        // earlier replies don't end in a tag that it then copies onto new replies.
+        if (prependToFirstTextPart(message, tag)) {
             continue
         }
 

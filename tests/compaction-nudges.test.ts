@@ -42,7 +42,15 @@ test("compaction replays existing nudges without changing the cached prefix or a
                 time: { created: 2 },
                 tokens: { input: 100, output: 1, reasoning: 0, cache: { read: 0, write: 0 } },
             },
-            parts: [{ type: "text", text: "Original answer" }],
+            parts: [
+                { type: "text", text: "Original answer" },
+                {
+                    type: "tool",
+                    tool: "read",
+                    callID: "call_read",
+                    state: { status: "completed", input: {}, output: "file contents" },
+                },
+            ],
         },
     ] as WithParts[]
     const primary = structuredClone(raw)

@@ -277,8 +277,28 @@ test("injectMessageIds marks every protected user text part as BLOCKED in messag
     assert.doesNotMatch((userTextTwo as any).text, /priority=/)
     assert.match(
         (assistantText as any).text,
-        /\n\n<dcp-message-id priority="low">m0002<\/dcp-message-id>/,
+        /^<dcp-message-id priority="low">m0002<\/dcp-message-id>\n\nShort follow-up note\.$/,
     )
+})
+
+test("injectMessageIds puts compact IDs before text-only assistant replies, not after", () => {
+    const sessionID = "ses_compact_assistant_prefix"
+    const messages: WithParts[] = [
+        buildMessage("msg-user-1", "user", sessionID, "Question", 1),
+        buildMessage("msg-assistant-1", "assistant", sessionID, "Answer text.\n", 2),
+    ]
+    const state = createSessionState("compact")
+    const config = buildConfig("range")
+
+    assignMessageRefs(state, messages)
+    injectMessageIds(state, config, messages)
+    injectMessageIds(state, config, messages)
+
+    const userText = (messages[0]?.parts[0] as any).text
+    const assistantText = (messages[1]?.parts[0] as any).text
+    assert.equal(userText, "Question\n\n@1@")
+    assert.equal(assistantText, "@2@\n\nAnswer text.\n")
+    assert.equal(stripHallucinationsFromString(assistantText, "compact").trim(), "Answer text.")
 })
 
 test("injectMessageIds injects ID into every tool output in range mode", () => {
@@ -456,7 +476,7 @@ test("message-mode nudges exclude protected user messages from priority guidance
     assert.doesNotMatch((injectedNudge as any).text, /m0001/)
 })
 
-test("range-mode nudges append to existing text parts before tool outputs", () => {
+test("range-mode nudges on assistant messages go into the last tool output, not assistant text", () => {
     const sessionID = "ses_range_nudge_injection"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, repeatedWord("alpha", 6000), 1),
@@ -492,17 +512,15 @@ test("range-mode nudges append to existing text parts before tool outputs", () =
 
     assert.equal(messages[1]?.parts.length, 2)
 
-    const injectedNudge = messages[1]?.parts[0]
-    const toolOutput = messages[1]?.parts[1]
-    assert.equal(injectedNudge?.type, "text")
-    assert.equal(toolOutput?.type, "tool")
-    assert.match((injectedNudge as any).text, /\n\n<dcp-system-reminder>Base context nudge/)
-    assert.match((injectedNudge as any).text, /Compressed block context:/)
-    assert.match((injectedNudge as any).text, /Active compressed blocks in this session: 1 \(b7\)/)
-    assert.equal((toolOutput as any).state.output, "task output body")
+    const assistantText = messages[1]?.parts[0]
+    const toolOutput = (messages[1]?.parts[1] as any).state.output
+    assert.equal((assistantText as any).text, "Working summary.")
+    assert.match(toolOutput, /^task output body\n\n<dcp-system-reminder>Base context nudge/)
+    assert.match(toolOutput, /Compressed block context:/)
+    assert.match(toolOutput, /Active compressed blocks in this session: 1 \(b7\)/)
 })
 
-test("range-mode nudges inject only once for assistant messages with multiple text parts", () => {
+test("range-mode nudges skip text-only assistant messages", () => {
     const sessionID = "ses_range_nudge_multi_text"
     const messages: WithParts[] = [
         buildMessage("msg-user-1", "user", sessionID, "Hello", 1),
@@ -535,8 +553,46 @@ test("range-mode nudges inject only once for assistant messages with multiple te
         iterationNudge: "<dcp-system-reminder>Base iteration nudge</dcp-system-reminder>",
     })
 
-    assert.match((messages[1]?.parts[0] as any).text, /Base context nudge/)
-    assert.doesNotMatch((messages[1]?.parts[1] as any).text, /Base context nudge/)
+    assert.equal(messages[1]?.parts.length, 2)
+    assert.equal((messages[1]?.parts[0] as any).text, "First chunk.")
+    assert.equal((messages[1]?.parts[1] as any).text, "Second chunk.")
+})
+
+test("soft turn nudges never become assistant text; strong turn nudges go on the user message", () => {
+    const sessionID = "ses_turn_nudge_force"
+    const build = (): WithParts[] => [
+        buildMessage("msg-user-1", "user", sessionID, "First", 1),
+        buildMessage("msg-assistant-1", "assistant", sessionID, "Reply.", 2),
+        buildMessage("msg-user-2", "user", sessionID, "Second", 3),
+    ]
+    const prompts = {
+        system: "",
+        compressRange: "",
+        compressMessage: "",
+        contextLimitNudge: "",
+        turnNudge: "<dcp-system-reminder>Base turn nudge</dcp-system-reminder>",
+        iterationNudge: "",
+    }
+
+    for (const force of ["soft", "strong"] as const) {
+        const messages = build()
+        const state = createSessionState()
+        const config = buildConfig("range")
+        config.compress.nudgeForce = force
+
+        assignMessageRefs(state, messages)
+        state.nudges.turnNudgeAnchors.add("msg-user-2")
+        state.nudges.turnNudgeAnchors.add("msg-assistant-1")
+        applyAnchoredNudges(state, config, messages, prompts)
+
+        assert.equal((messages[1]?.parts[0] as any).text, "Reply.", force)
+        const userText = (messages[2]?.parts[0] as any).text
+        if (force === "strong") {
+            assert.match(userText, /^Second\n\n<dcp-system-reminder>Base turn nudge/)
+        } else {
+            assert.equal(userText, "Second")
+        }
+    }
 })
 
 test("range-mode nudges skip empty assistant messages to avoid prefill (issue #463)", () => {

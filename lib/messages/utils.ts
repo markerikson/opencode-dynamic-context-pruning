@@ -109,6 +109,55 @@ export const appendToTextPart = (part: TextPart, injection: string): boolean => 
     return true
 }
 
+export const prependToFirstTextPart = (message: WithParts, injection: string): boolean => {
+    const normalizedInjection = injection.replace(/^\n+/, "")
+    if (!normalizedInjection.trim()) {
+        return false
+    }
+
+    for (const part of message.parts) {
+        if (part.type !== "text" || typeof part.text !== "string" || !part.text.trim()) {
+            continue
+        }
+        if (part.text.includes(normalizedInjection)) {
+            return true
+        }
+
+        part.text = `${normalizedInjection}\n\n${part.text.replace(/^\n+/, "")}`
+        return true
+    }
+
+    return false
+}
+
+export const appendToLastToolOutput = (message: WithParts, injection: string): boolean => {
+    const normalizedInjection = injection.replace(/^\n+/, "")
+    if (!normalizedInjection.trim()) {
+        return false
+    }
+
+    for (let i = message.parts.length - 1; i >= 0; i--) {
+        const part = message.parts[i]
+        if (
+            part.type !== "tool" ||
+            part.state?.status !== "completed" ||
+            typeof part.state.output !== "string"
+        ) {
+            continue
+        }
+        if (part.state.output.includes(normalizedInjection)) {
+            return true
+        }
+
+        const baseOutput = part.state.output.replace(/\n*$/, "")
+        part.state.output =
+            baseOutput.length > 0 ? `${baseOutput}\n\n${normalizedInjection}` : normalizedInjection
+        return true
+    }
+
+    return false
+}
+
 export const appendToAllToolParts = (message: WithParts, tag: string): boolean => {
     let injected = false
     for (const part of message.parts) {

@@ -13,10 +13,9 @@ import {
     listPriorityRefsBeforeIndex,
 } from "../priority"
 import {
-    appendToTextPart,
     appendToLastTextPart,
+    appendToLastToolOutput,
     createSyntheticTextPart,
-    hasContent,
 } from "../utils"
 import { getLastUserMessage, isIgnoredUserMessage } from "../query"
 import { getCurrentTokenUsage } from "../../token-utils"
@@ -208,6 +207,9 @@ function buildMessagePriorityGuidance(
     return renderMessagePriorityGuidance(priorityLabel, refs)
 }
 
+// Nudges must never be written as assistant-authored text: models treat their own
+// earlier output as a pattern and start echoing the reminder blocks in new replies.
+// For assistant anchors, the nudge goes into the last completed tool result or is skipped.
 function injectAnchoredNudge(message: WithParts, nudgeText: string): void {
     if (!nudgeText.trim()) {
         return
@@ -226,25 +228,7 @@ function injectAnchoredNudge(message: WithParts, nudgeText: string): void {
         return
     }
 
-    if (!hasContent(message)) {
-        return
-    }
-
-    for (const part of message.parts) {
-        if (part.type === "text") {
-            if (appendToTextPart(part, nudgeText)) {
-                return
-            }
-        }
-    }
-
-    const syntheticPart = createSyntheticTextPart(message, nudgeText)
-    const firstToolIndex = message.parts.findIndex((p) => p.type === "tool")
-    if (firstToolIndex === -1) {
-        message.parts.push(syntheticPart)
-    } else {
-        message.parts.splice(firstToolIndex, 0, syntheticPart)
-    }
+    appendToLastToolOutput(message, nudgeText)
 }
 
 function collectAnchoredMessages(
