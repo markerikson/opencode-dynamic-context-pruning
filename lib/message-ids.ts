@@ -3,8 +3,11 @@ import { isIgnoredUserMessage } from "./messages/query"
 
 const MESSAGE_REF_REGEX = /^m(\d{4})$/
 const BLOCK_REF_REGEX = /^b([1-9]\d*)$/
-const COMPACT_MESSAGE_REGEX = /^@([1-9]\d*)@$/
-const COMPACT_BLOCK_REGEX = /^@b([1-9]\d*)@$/
+// Compact parsing is lenient: models often drop one or both "@" markers or reuse the
+// xml-style "m0004"/"b1" forms. The canonical ref is rebuilt from the parsed number.
+const COMPACT_MESSAGE_REGEX = /^@?m?0*([1-9]\d*)@?$/
+const COMPACT_BLOCK_REGEX = /^@?b0*([1-9]\d*)@?$/
+const WRAPPING_CHARS_REGEX = /^[\s`'"([]+|[\s`'")\]]+$/g
 const MESSAGE_ID_TAG_NAME = "dcp-message-id"
 
 export type IdFormat = "xml" | "compact"
@@ -42,8 +45,13 @@ export function formatBlockRef(blockId: number, format: IdFormat = "xml"): strin
     return format === "compact" ? `@b${blockId}@` : `b${blockId}`
 }
 
-export function parseMessageRef(ref: string, format: IdFormat = "xml"): number | null {
+function normalizeRef(ref: string, format: IdFormat): string {
     const normalized = ref.trim().toLowerCase()
+    return format === "compact" ? normalized.replace(WRAPPING_CHARS_REGEX, "") : normalized
+}
+
+export function parseMessageRef(ref: string, format: IdFormat = "xml"): number | null {
+    const normalized = normalizeRef(ref, format)
     const match = normalized.match(format === "compact" ? COMPACT_MESSAGE_REGEX : MESSAGE_REF_REGEX)
     if (!match) {
         return null
@@ -60,7 +68,7 @@ export function parseMessageRef(ref: string, format: IdFormat = "xml"): number |
 }
 
 export function parseBlockRef(ref: string, format: IdFormat = "xml"): number | null {
-    const normalized = ref.trim().toLowerCase()
+    const normalized = normalizeRef(ref, format)
     const match = normalized.match(format === "compact" ? COMPACT_BLOCK_REGEX : BLOCK_REF_REGEX)
     if (!match) {
         return null

@@ -87,14 +87,30 @@ test("V2 IDs are unpadded, distinct from blocks, and survive state resets", () =
         ref: "@b1@",
         blockId: 1,
     })
+    for (const lenient of ["4", "@4", "4@", "@04@", "m4", "m0004", "`@4@`", " (@4@) "]) {
+        assert.deepEqual(
+            parseBoundaryId(lenient, "compact"),
+            { kind: "message", ref: "@4@", index: 4 },
+            lenient,
+        )
+    }
+    for (const lenient of ["b1", "@b1", "b1@", "B1", "(b1)", "`@b1@`"]) {
+        assert.deepEqual(
+            parseBoundaryId(lenient, "compact"),
+            { kind: "compressed-block", ref: "@b1@", blockId: 1 },
+            lenient,
+        )
+    }
     for (const invalid of [
-        "4",
-        "@04@",
+        "",
         "@0@",
         "@-1@",
         "@1.5@",
-        "m0004",
-        "b1",
+        "@b0@",
+        "m",
+        "@@",
+        "msg_4",
+        "@blocked@",
         "@9007199254740992@",
     ]) {
         assert.equal(parseBoundaryId(invalid, "compact"), null, invalid)
@@ -184,7 +200,7 @@ test("V2 range compression resolves block IDs and expands nested placeholders", 
     assert.doesNotMatch(JSON.stringify(projected), /Original user content/)
     await assert.rejects(
         tool.execute(
-            { topic: "Invalid", content: [{ startId: "m0001", endId: "@4@", summary: "invalid" }] },
+            { topic: "Invalid", content: [{ startId: "msg_1", endId: "@4@", summary: "invalid" }] },
             run,
         ),
         /message ID \(@4@\) or block ID \(@b1@\)/,
@@ -201,7 +217,7 @@ test("V2 message compression reports compact IDs and protects blocked content", 
                 { messageId: "@blocked@", topic: "Blocked", summary: "No" },
                 { messageId: "@1@", topic: "Protected", summary: "No" },
                 { messageId: "@b1@", topic: "Block", summary: "No" },
-                { messageId: "m0002", topic: "Invalid", summary: "No" },
+                { messageId: "msg_2", topic: "Invalid", summary: "No" },
                 { messageId: "@2@", topic: "Assistant", summary: "SECOND_SUMMARY" },
             ],
         },
