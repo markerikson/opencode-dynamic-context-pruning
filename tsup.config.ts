@@ -6,5 +6,7 @@ export default defineConfig({
     dts: false,
     clean: true,
     sourcemap: true,
-    noExternal: ["jsonc-parser"], // Bundle this to fix its broken ESM imports
+    // jsonc-parser: fixes its broken ESM imports. @opencode-ai/plugin: the vendored
+    // build is loaded by path, where no package install provides it.
+    noExternal: ["jsonc-parser", "@opencode-ai/plugin"],
 })
